@@ -1,12 +1,13 @@
 #pragma once
 #include <mongoc/mongoc.h>
 #include <json.hpp>
+#include <iostream>
 
 namespace mongo {
 	using json = nlohmann::json;
 	using Document = nlohmann::json;
 
-	bson_t* bson_from_json(json data) {
+	static bson_t* bson_from_json(json data) {
 		bson_error_t error;
 		return bson_new_from_json((const uint8_t*) data.dump().c_str(), -1, &error);
 	}
@@ -14,8 +15,9 @@ namespace mongo {
 	class Collection {
 	public:
 		Collection(mongoc_client_t* client, const char* db, const char* name) {
-			this->collection = mongoc_client_get_collection(client, db, name);
 			this->client = client;
+			this->collection = mongoc_client_get_collection(client, db, name);
+			this->name = name;
 		}
 
 		void insertOne(Document document) {
@@ -25,8 +27,13 @@ namespace mongo {
 			bson_destroy(doc);
 		}
 
-		std::vector<Document> find(Document filter, json opts) {
-			bson_error_t error;
+		void insertMany(std::vector<Document> docs) {
+			for (auto document : docs) {
+				insertOne(document);
+			}
+		}
+
+		std::vector<Document> find(Document filter, json opts = {}) {
 			bson_t* f = bson_from_json(filter);
 			bson_t* o = bson_from_json(opts);
 
@@ -44,24 +51,7 @@ namespace mongo {
 			return documents;
 		}
 
-		std::vector<Document> find(Document filter) {
-			bson_error_t error;
-			bson_t* f = bson_from_json(filter);
-
-			auto cursor = mongoc_collection_find_with_opts(collection, f, NULL, NULL);
-
-			std::vector<Document> documents; const bson_t* doc;
-			while (mongoc_cursor_next(cursor, &doc)) {
-				documents.push_back(
-					Document::parse(bson_as_canonical_extended_json(doc, NULL))
-				);
-			}
-
-			return documents;
-		}
-
 		Document findOne(Document filter) {
-			bson_error_t error;
 			bson_t* f = bson_from_json(filter);
 
 			auto cursor = mongoc_collection_find_with_opts(collection, f, NULL, NULL);
@@ -71,29 +61,56 @@ namespace mongo {
 			return Document::parse(bson_as_canonical_extended_json(doc, NULL));
 		}
 
-		~Collection() {
-			mongoc_collection_destroy(collection);
+		int estimateCount() {
+			bson_error_t error;
+			return static_cast<int>(mongoc_collection_estimated_document_count(collection, NULL, NULL, NULL, &error));
 		}
 
-	private:
-		mongoc_client_t* client;
-		mongoc_collection_t* collection;
-	};
+		int count(Document filter = {}) {
+			bson_error_t error;
+			return static_cast<int>(
+				mongoc_collection_count_documents(
+					collection, bson_from_json(filter), NULL, NULL, NULL, &error
+				)
+			);
+		}
 
-	class Database {
-	public:
-		Database(mongoc_client_t* client, const char* name) {
-			this->client = client;
-			this->name = name;
+		void deleteMany(Document filter) {
+			bson_error_t error;
+			mongoc_collection_delete_many(collection, bson_from_json(filter), NULL, NULL, &error);
+		}
+
+		void deleteOne(Document filter) {
+			bson_error_t error;
+			mongoc_collection_delete_one(collection, bson_from_json(filter), NULL, NULL, &error);
+		}
+
+		void drop() {
+			bson_error_t error;
+			mongoc_collection_drop(collection, &error);
+		}
+
+		void rename(const char* newdb, const char* newcoll, bool dropBeforeRename) {
+			bson_error_t error;
+			mongoc_collection_rename(collection, newdb, newcoll, dropBeforeRename, &error);
+		}
+
+		void replaceOne(Document old, Document _new) {
+			bson_error_t error;
+			mongoc_collection_replace_one(collection, bson_from_json(old), bson_from_json(_new), NULL, NULL, &error);
+		}
+
+		void updateMany(Document filter, Document update) {
+			bson_error_t error;
+			mongoc_collection_update_many(collection, bson_from_json(filter), bson_from_json(update), NULL, NULL, &error);
 		}
 
 		Collection getCollection(const char* name) {
-			Collection c(this->client, this->name, name);
-			return c;
+			return Collection{ this->client, this->name, name };
 		}
 
-	private:
 		const char* name;
+	private:
 		mongoc_client_t* client;
 	};
 
@@ -117,8 +134,7 @@ namespace mongo {
 		}
 
 		Database getDatabase(const char* name) {
-			Database d(this->client, name);
-			return d;
+			return Database{ this->client, name };
 		}
 
 		~Client() {
