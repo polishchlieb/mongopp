@@ -42,7 +42,7 @@ mongo::Collection coll = db.getCollection("name");
 ### mongo::Collection::Collection
 **Note**: you should use `mongo::Database::getCollection` instead probably
 ```cpp
-mongo::Collection(mongoc_client_t* client, const char* db, const char* name);
+mongo::Collection::Collection(mongoc_client_t* client, const char* db, const char* name);
 ```
 ### mongo::Collection::insertOne
 ```cpp

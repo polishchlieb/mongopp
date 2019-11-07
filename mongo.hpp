@@ -61,7 +61,7 @@ namespace mongo {
 			return Document::parse(bson_as_canonical_extended_json(doc, NULL));
 		}
 
-		int estimateCount() {
+		int estimate_count() {
 			bson_error_t error;
 			return static_cast<int>(mongoc_collection_estimated_document_count(collection, NULL, NULL, NULL, &error));
 		}
@@ -103,6 +103,28 @@ namespace mongo {
 		void updateMany(Document filter, Document update) {
 			bson_error_t error;
 			mongoc_collection_update_many(collection, bson_from_json(filter), bson_from_json(update), NULL, NULL, &error);
+		}
+
+		void updateOne(Document filter, Document update) {
+			bson_error_t error;
+			mongoc_collection_update_one(collection, bson_from_json(filter), bson_from_json(update), NULL, NULL, &error);
+		}
+
+		~Collection() {
+			mongoc_collection_destroy(collection);
+		}
+
+		const char* name;
+	private:
+		mongoc_client_t* client;
+		mongoc_collection_t* collection;
+	};
+
+	class Database {
+	public:
+		Database(mongoc_client_t* client, const char* name) {
+			this->client = client;
+			this->name = name;
 		}
 
 		Collection getCollection(const char* name) {
