@@ -5,44 +5,46 @@
 
 namespace mongo {
 	using json = nlohmann::json;
-	using Document = nlohmann::json;
-
-	static bson_t* bson_from_json(json data) {
-		bson_error_t error;
-		return bson_new_from_json((const uint8_t*) data.dump().c_str(), -1, &error);
-	}
+	typedef json Document;
 
 	class Collection {
 	public:
-		Collection(mongoc_client_t* client, const char* db, const char* name) {
+		Collection(mongoc_client_t* client, const char* dbname, const char* name) {
 			this->client = client;
-			this->collection = mongoc_client_get_collection(client, db, name);
+			this->collection = mongoc_client_get_collection(client, dbname, name);
 			this->name = name;
 		}
-
-		void insertOne(Document document) {
+		void insertOne(const Document& document) {
 			bson_error_t error;
-			bson_t* doc = bson_new_from_json((const uint8_t*) document.dump().c_str(), -1, &error);
+			bson_t* doc = bson_new_from_json((const uint8_t*)document.dump().c_str(), -1, &error);
 			mongoc_collection_insert_one(collection, doc, NULL, NULL, &error);
 			bson_destroy(doc);
 		}
-
-		void insertMany(std::vector<Document> docs) {
-			for (auto document : docs) {
-				insertOne(document);
+		void insertMany(const std::vector<Document>& docs) {
+			bson_error_t error;
+			const bson_t** documents{};
+			const unsigned int size = docs.size();
+			for (unsigned int i = 0; i < size; i++) {
+				documents[i] = bson_new_from_json((const uint8_t*)docs[i].dump().c_str(), -1, &error);
 			}
+			mongoc_collection_insert_many(collection, documents, size, NULL, NULL, &error);
+			for (unsigned int i = 0; i < size; i++) {
+				bson_free((bson_t*)documents[i]);
+			}
+			bson_free(documents);
 		}
+		std::vector<Document> find(const Document& filter, const json& opts = {}) {
+			bson_error_t error;
+			bson_t* f = bson_new_from_json((const uint8_t*)filter.dump().c_str(), -1, &error);
+			bson_t* o = bson_new_from_json((const uint8_t*)opts.dump().c_str(), -1, &error);
 
-		std::vector<Document> find(Document filter, json opts = {}) {
-			bson_t* f = bson_from_json(filter);
-			bson_t* o = bson_from_json(opts);
+			const auto cursor = mongoc_collection_find_with_opts(collection, f, o, NULL);
 
-			auto cursor = mongoc_collection_find_with_opts(collection, f, o, NULL);
-
-			std::vector<Document> documents; const bson_t* doc;
+			std::vector<Document> documents;
+			const bson_t* doc;
 			while (mongoc_cursor_next(cursor, &doc)) {
 				documents.push_back(
-					Document::parse(bson_as_canonical_extended_json(doc, NULL))
+					Document::parse(bson_as_json(doc, NULL))
 				);
 			}
 
@@ -50,66 +52,81 @@ namespace mongo {
 			bson_destroy(o);
 			return documents;
 		}
-
-		Document findOne(Document filter) {
-			bson_t* f = bson_from_json(filter);
+		Document findOne(const Document& filter) {
+			bson_error_t error;
+			bson_t* f = bson_new_from_json((const uint8_t*)filter.dump().c_str(), -1, &error);
 
 			auto cursor = mongoc_collection_find_with_opts(collection, f, NULL, NULL);
 
-			std::vector<Document> documents; const bson_t* doc;
+			std::vector<Document> documents;
+			const bson_t* doc;
 			if (!mongoc_cursor_next(cursor, &doc)) return NULL;
-			return Document::parse(bson_as_canonical_extended_json(doc, NULL));
-		}
+			const auto result = Document::parse(bson_as_json(doc, NULL));
 
+			bson_free(f);
+
+			return result;
+		}
 		int estimate_count() {
 			bson_error_t error;
 			return static_cast<int>(mongoc_collection_estimated_document_count(collection, NULL, NULL, NULL, &error));
 		}
-
-		int count(Document filter = {}) {
+		int count(const Document& _filter = {}) {
 			bson_error_t error;
-			return static_cast<int>(
+			bson_t* filter = bson_new_from_json((const uint8_t*)_filter.dump().c_str(), -1, &error);
+			const int result = static_cast<int>(
 				mongoc_collection_count_documents(
-					collection, bson_from_json(filter), NULL, NULL, NULL, &error
+					collection, filter, NULL, NULL, NULL, &error
 				)
-			);
+				);
+			bson_free(filter);
+			return result;
 		}
-
-		void deleteMany(Document filter) {
+		void deleteMany(const Document& _filter) {
 			bson_error_t error;
-			mongoc_collection_delete_many(collection, bson_from_json(filter), NULL, NULL, &error);
+			bson_t* filter = bson_new_from_json((const uint8_t*)_filter.dump().c_str(), -1, &error);
+			mongoc_collection_delete_many(collection, filter, NULL, NULL, &error);
+			bson_free(filter);
 		}
-
-		void deleteOne(Document filter) {
+		void deleteOne(const Document& _filter) {
 			bson_error_t error;
-			mongoc_collection_delete_one(collection, bson_from_json(filter), NULL, NULL, &error);
+			bson_t* filter = bson_new_from_json((const uint8_t*)_filter.dump().c_str(), -1, &error);
+			mongoc_collection_delete_one(collection, filter, NULL, NULL, &error);
+			bson_free(filter);
 		}
-
 		void drop() {
 			bson_error_t error;
 			mongoc_collection_drop(collection, &error);
 		}
-
 		void rename(const char* newdb, const char* newcoll, bool dropBeforeRename) {
 			bson_error_t error;
+			this->name = newcoll;
 			mongoc_collection_rename(collection, newdb, newcoll, dropBeforeRename, &error);
 		}
-
-		void replaceOne(Document old, Document _new) {
+		void replaceOne(const Document& _old, const Document& __new) {
 			bson_error_t error;
-			mongoc_collection_replace_one(collection, bson_from_json(old), bson_from_json(_new), NULL, NULL, &error);
+			bson_t* old = bson_new_from_json((const uint8_t*)_old.dump().c_str(), -1, &error);
+			bson_t* _new = bson_new_from_json((const uint8_t*)__new.dump().c_str(), -1, &error);
+			mongoc_collection_replace_one(collection, old, _new, NULL, NULL, &error);
+			bson_free(old);
+			bson_free(_new);
 		}
-
-		void updateMany(Document filter, Document update) {
+		void updateMany(const Document& _filter, const Document& _update) {
 			bson_error_t error;
-			mongoc_collection_update_many(collection, bson_from_json(filter), bson_from_json(update), NULL, NULL, &error);
+			bson_t* filter = bson_new_from_json((const uint8_t*)_filter.dump().c_str(), -1, &error);
+			bson_t* update = bson_new_from_json((const uint8_t*)_update.dump().c_str(), -1, &error);
+			mongoc_collection_update_many(collection, filter, update, NULL, NULL, &error);
+			bson_free(filter);
+			bson_free(update);
 		}
-
-		void updateOne(Document filter, Document update) {
+		void updateOne(const Document& _filter, const Document& _update) {
 			bson_error_t error;
-			mongoc_collection_update_one(collection, bson_from_json(filter), bson_from_json(update), NULL, NULL, &error);
+			bson_t* filter = bson_new_from_json((const uint8_t*)_filter.dump().c_str(), -1, &error);
+			bson_t* update = bson_new_from_json((const uint8_t*)_update.dump().c_str(), -1, &error);
+			mongoc_collection_update_one(collection, filter, update, NULL, NULL, &error);
+			bson_free(filter);
+			bson_free(update);
 		}
-
 		~Collection() {
 			mongoc_collection_destroy(collection);
 		}
@@ -126,7 +143,6 @@ namespace mongo {
 			this->client = client;
 			this->name = name;
 		}
-
 		Collection getCollection(const char* name) {
 			return Collection{ this->client, this->name, name };
 		}
@@ -154,16 +170,13 @@ namespace mongo {
 
 			this->client = client;
 		}
-
 		Database getDatabase(const char* name) {
 			return Database{ this->client, name };
 		}
-
 		~Client() {
 			mongoc_client_destroy(client);
 			mongoc_cleanup();
 		}
-
 	private:
 		mongoc_client_t* client;
 	};
