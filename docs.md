@@ -54,16 +54,13 @@ collection.insertOne({ { "hello", "world" } });
 ```
 
 ### mongo::Collection::find
-**TODO**: Create `mongo::Cursor` instead of using `std::vector`. Performance reasons
+Returns a cursor to the documents in a collection that satisfy given filter
 ```cpp
-std::vector<mongo::Document> mongo::Collection::find(mongo::Document filter, nlohmann::json opts = {});
+mongo::Cursor mongo::Collection::find(mongo::Document filter, nlohmann::json opts = {});
 ```
 Example:
 ```cpp
-auto docs = collection.find({ { "hello", "world" } });
-for (auto document : docs) {
-    std::cout << document.dump() << std::endl;
-}
+auto cursor = collection.find({ { "hello", "world" } });
 ```
 
 ### mongo::Collection::findOne
@@ -162,7 +159,9 @@ Example:
 ```cpp
 collection.updateMany(
     { { "blyat", true } },
-    { { "blyat", false } }
+    { { "$set", {
+        { "blyat", false }
+    } }
 );
 ```
 
@@ -183,4 +182,46 @@ collection.updateOne(
 ## mongo::bson_from_json
 ```cpp
 static bson_t* bson_from_json(nlohmann::json data);
+```
+
+## mongo::Cursor
+### mongo::Cursor::Cursor
+**Note**: you should not initiate this class manually, use collection methods, e.g. `mongo::Collection::find` instead.
+```cpp
+mongo::Cursor::Cursor(mongoc_collection_t* collection, const Document& filter, const json& opts);
+```
+
+### mongo::Cursor::next
+Retrieves next document from the cursor
+```cpp
+mongo::Document mongo::Cursor::next();
+```
+
+Example:
+```cpp
+auto cursor = collection.find({ {"year", "1991"} });
+// Print the first element from the cursor
+std::cout << cursor.next().dump() << std::endl;
+
+// Print next elements using the while loop
+mongo::Document current;
+while ((current = cursor.next()) != NULL) {
+    std::cout << cursor.next().dump() << std::endl;
+}
+```
+
+### mongo::Cursor::all
+Retrieves all documents from the cursor
+```cpp
+std::vector<mongo::Document> all();
+```
+
+Example:
+```cpp
+auto cursor = collection.find({ {"year", "1991"} });
+auto elements = cursor.all();
+
+for (const auto& element : elements) {
+    std::cout << element.dump() << std::endl;
+}
 ```

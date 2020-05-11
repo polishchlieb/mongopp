@@ -7,6 +7,37 @@ namespace mongo {
 	using json = nlohmann::json;
 	typedef json Document;
 
+	class Cursor {
+	public:
+		Cursor(mongoc_collection_t* collection, const Document& _filter, const json& _opts) {
+			bson_error_t error;
+			filter = bson_new_from_json((const uint8_t*)_filter.dump().c_str(), -1, &error);
+			opts = bson_new_from_json((const uint8_t*)_opts.dump().c_str(), -1, &error);
+			cursor = mongoc_collection_find_with_opts(collection, filter, opts, NULL);
+		}
+		Document next() {
+			const bson_t* doc;
+			if (!mongoc_cursor_next(cursor, &doc)) return NULL;
+			return Document::parse(bson_as_json(doc, NULL));
+		}
+		std::vector<Document> all() {
+			std::vector<Document> result;
+			const bson_t* doc;
+			while (mongoc_cursor_next(cursor, &doc)) {
+				result.push_back(Document::parse(bson_as_json(doc, NULL)));
+			}
+			return result;
+		}
+		~Cursor() {
+			mongoc_cursor_destroy(cursor);
+			bson_free(filter);
+			bson_free(opts);
+		}
+	private:
+		mongoc_cursor_t* cursor;
+		bson_t* filter, * opts;
+	};
+	
 	class Collection {
 	public:
 		Collection(mongoc_client_t* client, const char* dbname, const char* name) {
@@ -33,24 +64,8 @@ namespace mongo {
 			}
 			bson_free(documents);
 		}
-		std::vector<Document> find(const Document& filter, const json& opts = {}) {
-			bson_error_t error;
-			bson_t* f = bson_new_from_json((const uint8_t*)filter.dump().c_str(), -1, &error);
-			bson_t* o = bson_new_from_json((const uint8_t*)opts.dump().c_str(), -1, &error);
-
-			const auto cursor = mongoc_collection_find_with_opts(collection, f, o, NULL);
-
-			std::vector<Document> documents;
-			const bson_t* doc;
-			while (mongoc_cursor_next(cursor, &doc)) {
-				documents.push_back(
-					Document::parse(bson_as_json(doc, NULL))
-				);
-			}
-
-			bson_destroy(f);
-			bson_destroy(o);
-			return documents;
+		Cursor find(const Document& filter, const json& opts = {}) {
+			return Cursor(this->collection, filter, opts);
 		}
 		Document findOne(const Document& filter) {
 			bson_error_t error;
