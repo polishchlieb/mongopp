@@ -1,7 +1,8 @@
 # mongo++ documentation
 
 **Note**: library uses const char* instead of std::string. To convert from std::string, use `str.c_str()`\
-**yetanothernote:** `mongo::Document` is equivalent to `nlohmann::json`
+**yetanothernote:** `mongo::Document` is equivalent to `nlohmann::json`\
+**crazy note vol. 3** this is not the MongoDB documentation, you can find it [here](https://docs.mongodb.com/manual/reference/) instead
 
 ## mongo::Client
 ### mongo::Client::Client
@@ -19,7 +20,7 @@ mongo::Database client::getDatabase(const char* name);
 ```
 Example:
 ```cpp
-mongo::Database db = client.getDatabase("name");
+mongo::Database db = client.getDatabase("app");
 ```
 
 ## mongo::Database
@@ -35,12 +36,12 @@ mongo::Collection db::getCollection(const char* name);
 ```
 Example:
 ```cpp
-mongo::Collection coll = db.getCollection("name");
+auto users = db.getCollection("users");
 ```
 
 ## mongo::Collection
 ### mongo::Collection::Collection
-**Note**: you should use `mongo::Database::getCollection` instead probably
+**Note**: perhaps you should use `mongo::Database::getCollection` instead
 ```cpp
 mongo::Collection::Collection(mongoc_client_t* client, const char* db, const char* name);
 ```
@@ -50,7 +51,10 @@ void mongo::Collection::insertOne(mongo::Document document);
 ```
 Example:
 ```cpp
-collection.insertOne({ { "hello", "world" } });
+collection.insertOne({
+    {"username", "towarzyszchlebek"},
+    {"github", "https://github.com/polishchlieb"}
+});
 ```
 
 ### mongo::Collection::find
@@ -60,7 +64,8 @@ mongo::Cursor mongo::Collection::find(mongo::Document filter, nlohmann::json opt
 ```
 Example:
 ```cpp
-auto cursor = collection.find({ { "hello", "world" } });
+const auto ids = mongo::json::array({ 1, 2, 3 });
+auto cursor = collection.find({ {"id", { {"$in", ids} }} });
 ```
 
 ### mongo::Collection::findOne
@@ -71,7 +76,7 @@ mongo::Document mongo::Collection::findOne(mongo::Document filter);
 Example:
 ```cpp
 // Finds a document and displays it
-auto document = collection.findOne({ { "hello", "world" } });
+auto document = collection.findOne({ {"username", "towarzyszchlebek"} });
 std::cout << document.dump() << std::endl;
 ```
 
@@ -83,6 +88,7 @@ int mongo::Collection::estimateCount();
 Example:
 ```cpp
 int count = collection.estimateCount();
+std::cout << count << std::endl;
 ```
 
 ### mongo::Collection::count
@@ -93,6 +99,7 @@ int mongo::Collection::count(mongo::Document filter = {});
 Example:
 ```cpp
 int count = collection.count();
+std::cout << count << std::endl;
 ```
 
 ### mongo::Collection::deleteMany
@@ -102,7 +109,8 @@ void mongo::Collection::deleteMany(mongo::Document filter);
 ```
 Example:
 ```cpp
-collection.deleteMany({ { "hello", "world" } });
+const auto ids = mongo::json::array({ 1, 2, 3 });
+collection.deleteMany({ {"id", { {"$in", ids} }} });
 ```
 
 ### mongo::Collection::deleteOne
@@ -112,7 +120,7 @@ void mongo::Collection::deleteOne(mongo::Document filter);
 ```
 Example:
 ```cpp
-collection.deleteOne({ { "hello", "world" } });
+collection.deleteOne({ {"username", "towarzyszchlebek"} });
 ```
 
 ### mongo::Collection::drop
@@ -133,19 +141,22 @@ void mongo::Collection::rename(const char* newdb, const char* newcoll, bool drop
 where: `newdb` - new collection's database name, `newcoll` - new name of the collection, `dropBeforeRename` drops the collection and creates its copy instead of just renaming it if set to true.\
 Example:
 ```cpp
-collection.rename("database", "collection", false);
+collection.rename("newapp", "users", false);
 ```
 
 ### mongo::Collection::replaceOne
 Replaces a document in the collection
 ```cpp
-void mongo::Collection::replaceOne(mongo::Document old, mongo::Document _new);
+void mongo::Collection::replaceOne(mongo::Document filter, mongo::Document newDocument);
 ```
 Example:
 ```cpp
 collection.replaceOne(
-    { { "hello", "world" } },
-    { { "hell", "world" } }
+    { {"username", "towarzyszchlebek"} },
+    {
+        {"username", "polishchlieb"},
+        {"id", -1}
+    }
 );
 ```
 
@@ -157,11 +168,10 @@ void mongo::Collection::updateMany(mongo::Document filter, mongo::Document updat
 
 Example:
 ```cpp
+const auto ids = mongo::json::array({ 1, 2, 3 });
 collection.updateMany(
-    { { "blyat", true } },
-    { { "$set", {
-        { "blyat", false }
-    } }
+    { {"id", { {"$in", ids} }} },
+    { {"$inc", { {"points", 1} }} }
 );
 ```
 
@@ -174,8 +184,8 @@ void mongo::Collection::updateOne(mongo::Document filter, mongo::Document update
 Example:
 ```cpp
 collection.updateOne(
-    { { "hello", "world" } },
-    { { "pimposlaw", "doggo" } }
+    { {"username", "towarzyszchlebek"} },
+    { {"$inc", { {"points", 1} }} }
 );
 ```
 
