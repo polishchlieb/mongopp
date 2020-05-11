@@ -1,7 +1,7 @@
 # mongo++ documentation
 
 **Note**: library uses const char* instead of std::string. To convert from std::string, use `str.c_str()`\
-**yetanothernote:** `mongo::Document` is equivalent to `nlohmann::json`\
+**yetanothernote:** `mongo::Document` and `mongo::json` equivalent to `nlohmann::json`\
 **crazy note vol. 3** this is not the MongoDB documentation, you can find it [here](https://docs.mongodb.com/manual/reference/) instead
 
 ## mongo::Client
@@ -20,7 +20,7 @@ mongo::Database client::getDatabase(const char* name);
 ```
 Example:
 ```cpp
-mongo::Database db = client.getDatabase("app");
+auto db = client.getDatabase("app");
 ```
 
 ## mongo::Database
@@ -47,7 +47,7 @@ mongo::Collection::Collection(mongoc_client_t* client, const char* db, const cha
 ```
 ### mongo::Collection::insertOne
 ```cpp
-void mongo::Collection::insertOne(mongo::Document document);
+void mongo::Collection::insertOne(const mongo::Document& document);
 ```
 Example:
 ```cpp
@@ -60,7 +60,7 @@ collection.insertOne({
 ### mongo::Collection::find
 Returns a cursor to the documents in a collection that satisfy given filter
 ```cpp
-mongo::Cursor mongo::Collection::find(mongo::Document filter, nlohmann::json opts = {});
+mongo::Cursor mongo::Collection::find(const mongo::Document& filter, const mongo::json& opts = {});
 ```
 Example:
 ```cpp
@@ -71,7 +71,7 @@ auto cursor = collection.find({ {"id", { {"$in", ids} }} });
 ### mongo::Collection::findOne
 Gets first document from the collection that satisfies given filter
 ```cpp
-mongo::Document mongo::Collection::findOne(mongo::Document filter);
+mongo::Document mongo::Collection::findOne(const mongo::Document& filter);
 ```
 Example:
 ```cpp
@@ -92,9 +92,9 @@ std::cout << count << std::endl;
 ```
 
 ### mongo::Collection::count
-Gets accurate count of documents in the collection that satisfy given filter
+Gets accurate count of documents that satisfy given filter
 ```cpp
-int mongo::Collection::count(mongo::Document filter = {});
+int mongo::Collection::count(const mongo::Document& filter = {});
 ```
 Example:
 ```cpp
@@ -103,9 +103,9 @@ std::cout << count << std::endl;
 ```
 
 ### mongo::Collection::deleteMany
-Deletes all the documents from the collection that satisfy given filter
+Deletes all documents that satisfy given filter from the collection
 ```cpp
-void mongo::Collection::deleteMany(mongo::Document filter);
+void mongo::Collection::deleteMany(const mongo::Document& filter);
 ```
 Example:
 ```cpp
@@ -114,9 +114,9 @@ collection.deleteMany({ {"id", { {"$in", ids} }} });
 ```
 
 ### mongo::Collection::deleteOne
-Deletes the first documents that satisfies given filter
+Deletes the first document that satisfies given filter
 ```cpp
-void mongo::Collection::deleteOne(mongo::Document filter);
+void mongo::Collection::deleteOne(const mongo::Document& filter);
 ```
 Example:
 ```cpp
@@ -147,7 +147,7 @@ collection.rename("newapp", "users", false);
 ### mongo::Collection::replaceOne
 Replaces a document in the collection
 ```cpp
-void mongo::Collection::replaceOne(mongo::Document filter, mongo::Document newDocument);
+void mongo::Collection::replaceOne(const mongo::Document& filter, const mongo::Document& newDocument);
 ```
 Example:
 ```cpp
@@ -161,9 +161,9 @@ collection.replaceOne(
 ```
 
 ### mongo::Collection::updateMany
-Updates all the documents in the collection that satisfy given filter
+Updates all documents that satisfy given filter.
 ```cpp
-void mongo::Collection::updateMany(mongo::Document filter, mongo::Document update);
+void mongo::Collection::updateMany(const mongo::Document& filter, const mongo::Document& update);
 ```
 
 Example:
@@ -178,7 +178,7 @@ collection.updateMany(
 ### mongo::Collection::updateOne
 Updates the first document in the collection that satisfies given filter
 ```cpp
-void mongo::Collection::updateOne(mongo::Document filter, mongo::Document update);
+void mongo::Collection::updateOne(const mongo::Document& filter, const mongo::Document& update);
 ```
 
 Example:
@@ -189,16 +189,11 @@ collection.updateOne(
 );
 ```
 
-## mongo::bson_from_json
-```cpp
-static bson_t* bson_from_json(nlohmann::json data);
-```
-
 ## mongo::Cursor
 ### mongo::Cursor::Cursor
 **Note**: you should not initiate this class manually, use collection methods, e.g. `mongo::Collection::find` instead.
 ```cpp
-mongo::Cursor::Cursor(mongoc_collection_t* collection, const Document& filter, const json& opts);
+mongo::Cursor::Cursor(mongoc_collection_t* collection, const mongo::Document& filter, const mongo::json& opts);
 ```
 
 ### mongo::Cursor::next
